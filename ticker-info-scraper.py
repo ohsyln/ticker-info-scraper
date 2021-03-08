@@ -139,19 +139,19 @@ class Parser():
       r = requests.get(url=OTCMARKETS_URL.format(ticker))
     except Exception as e:
       print('{}: (requests.get)'.format(e))
-      return self.format_urllist(urllist(url_list)) 
+      return self.format_urllist(url_list)
     else:
       if r.status_code != 200:
         print('get_dilution_from_otcmarkets (requests.get)')
         print('code: {}, ticker: {}'.format(r.status_code, ticker))
-        return self.format_urllist(urllist(url_list)) 
+        return self.format_urllist(url_list)
 
     j = r.json()
     try:
       records = j['records']
     except:
       raise ParsingException("(get_dilution_from_otcmarkets) can't find 'records' key in JSON")
-      return self.format_urllist(urllist(url_list))
+      return self.format_urllist(url_list)
 
     found_10Q = 0
     # TODO consider doing automated dilution analysis via filing_url
