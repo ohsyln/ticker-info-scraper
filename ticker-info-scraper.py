@@ -121,7 +121,7 @@ class Parser():
     tds = soup.find_all('span')
     for i, td in enumerate(tds):
       try:
-        if "Premarket Volume:" in td.contents:
+        if "Before Hours Volume:" in td.contents:
           premarket_vol = self.strip_marketwatch_str(tds[i+1].contents)
       except:
         raise ParsingException("parsing error: can't find tds[i+1] pub_float info")
