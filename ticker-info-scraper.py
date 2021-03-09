@@ -220,7 +220,7 @@ class TelegramAPI():
         r = requests.get(url=URL)
         output = self.parse_response(r)
       except requests.exceptions.RequestException as e:
-        log.plog("RequestException: {} (retry in 60s)")
+        log.plog("RequestException: {} (retry in 60s)".format(e))
         time.sleep(60)
       else:
         # If tickers exist, we proceed
@@ -263,7 +263,7 @@ class TelegramAPI():
       try:
         r = requests.get(url=URL, params=PARAMS)
       except requests.exceptions.RequestException as e:
-        log.plog("RequestException: {} (retry in 60s)")
+        log.plog("RequestException: {} (retry in 60s)".format(e))
         time.sleep(60)
       else:
         # Successfully sent msg to user
