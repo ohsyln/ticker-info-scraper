@@ -21,7 +21,7 @@ FINVIZ_URL = 'https://finviz.com/quote.ashx'
 CHART_URL = 'https://finviz.com/quote.ashx?t={}'
 MARKETWATCH_URL = 'https://marketwatch.com/investing/stock/{}'
 OTCMARKETS_FILING_URL = 'https://www.otcmarkets.com/filing/html?id={coy_id}&guid={guid}'
-NO_OF_FILING_ENTRIES = '20'
+NO_OF_FILING_ENTRIES = '40'
 OTCMARKETS_URL = 'https://backend.otcmarkets.com/otcapi/company/sec-filings/{0}?symbol={0}&page=1&pageSize=' + NO_OF_FILING_ENTRIES
 OFFERING_424 = '424'
 QUARTER_10Q = '10-Q'
@@ -82,18 +82,19 @@ class Parser():
         if "Shs Float" in td.contents:
           pub_float = tds[i+1].contents
           pub_float = self.strip_finviz_str(pub_float)
-      except:
-        raise ParsingException("parsing error: can't find tds[i+1] pub_float info")
+      except Exception as e:
+        log.plog("{}".format(e))
 
       try:
         if "Short Float" in td.contents:
           short_interest = tds[i+1].contents
           short_interest = self.strip_finviz_str(short_interest)
-      except:
-        raise ParsingException("parsing error: can't find tds[i+1] short_interest info")
+      except Exception as e:
+        log.plog("{}".format(e))
 
     return [short_interest, pub_float]
 
+  # Helper method used by get_pre_vol_from_marketwatch()
   def strip_marketwatch_str(self, s):
     s = str(s)
     s = ''.join(s.strip('</bg-quote>]'))
@@ -109,7 +110,7 @@ class Parser():
     try:
       r = requests.get(url=MARKETWATCH_URL.format(ticker), params={'mod': 'quote_search'})
     except Exception as e:
-      print('{}: (requests.get)'.format(e))
+      print('(requests.get) {}'.format(e))
       return premarket_vol
     else:
       if r.status_code != 200:
@@ -123,8 +124,9 @@ class Parser():
       try:
         if "Before Hours Volume:" in td.contents:
           premarket_vol = self.strip_marketwatch_str(tds[i+1].contents)
-      except:
-        raise ParsingException("parsing error: can't find tds[i+1] pub_float info")
+          return premarket_vol
+      except Exception as e:
+        log.plog("strip_marketwatch_str(): {}".format(e))
 
     return premarket_vol
 
@@ -139,18 +141,18 @@ class Parser():
       r = requests.get(url=OTCMARKETS_URL.format(ticker))
     except Exception as e:
       print('{}: (requests.get)'.format(e))
-      return self.format_urllist(url_list)
+      return self.format_urllist(url_list) 
     else:
       if r.status_code != 200:
         print('get_dilution_from_otcmarkets (requests.get)')
-        print('code: {}, ticker: {}'.format(r.status_code, ticker))
+        print('  code: {}, ticker: {}'.format(r.status_code, ticker))
         return self.format_urllist(url_list)
 
     j = r.json()
     try:
       records = j['records']
-    except:
-      raise ParsingException("(get_dilution_from_otcmarkets) can't find 'records' key in JSON")
+    except Exception as e:
+      log.plog("j['records']: {}".format(e))
       return self.format_urllist(url_list)
 
     found_10Q = 0
@@ -174,8 +176,8 @@ class Parser():
           msg = '({}) {}'.format(received_date, filing_url)
           url_list[QUARTER_10Q].append(msg)
           found_10Q = 1
-      except:
-        raise ParsingException('error when parsing JSON record')
+      except Exception as e:
+        log.plog("get_dilution_from_otcmarkets() parsing records: {}".format(e))
 
     return self.format_urllist(url_list)
 
@@ -222,9 +224,12 @@ class TelegramAPI():
       except requests.exceptions.RequestException as e:
         log.plog("RequestException: {} (retry in 60s)".format(e))
         time.sleep(60)
+      except ParsingException as e:
+        log.plog("ParsingException: {}".format(e))
+        time.sleep(60)
       else:
-        # If tickers exist, we proceed
-        if output[TICKERS]:
+        # If ticker exist, we proceed
+        if output:
           not_success = 0
         else:
           #print("Waiting for user input..")
@@ -235,12 +240,18 @@ class TelegramAPI():
     return output
 
   # Parse JSON response from user
-  # Returns none if no polls from user via Telegram,
-  # else returns [user_input, chat_id]
+  # Returns
+  #   None, if no polls from user via Telegram
+  #   dict (TICKERS, CHAT_ID keys), otherwise
   def parse_response(self, r):
     output = {TICKERS: None, CHAT_ID: None}
     j = json.loads(r.text)
     msg_list = j["result"]
+
+    # If no user input, return
+    if len(msg_list) == 0:
+      return None 
+
     try:
       output[TICKERS] = msg_list[-1]["message"]["text"]
     except:
@@ -249,9 +260,10 @@ class TelegramAPI():
       output[CHAT_ID] = msg_list[-1]["message"]["from"]["id"]
     except:
       raise ParsingException("can't parse chat_id from user: {}".format(msg_list[-1])) 
+
     # Check if user polls for new info
     if output[TICKERS] == self.prev_input:
-      return {TICKERS: None, CHAT_ID: None} 
+      return None
     return output
 
   # Sends msg to user via Telegram bot
